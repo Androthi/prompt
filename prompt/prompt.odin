@@ -20,6 +20,7 @@ err	:: enum {
 	INVALID_HANDLE,
 	CONSOLE_MODE,
 	MIN_MAX,
+  NO_KEY,
 }
 
 init :: proc( use_prompt:string = def_prompt) ->err {
@@ -34,24 +35,29 @@ init :: proc( use_prompt:string = def_prompt) ->err {
 	// don't need these yet. 
 	//if ! w.GetConsoleMode(hStdin, &old_mode) do return .CONSOLE_MODE
 	w.FlushConsoleInputBuffer(w.HANDLE(hStdin))
+  w.FlushConsoleInputBuffer(w.HANDLE(hStdout))
 	return .OK
 }
 
-getch ::proc() ->rune {
+getch ::proc() ->(char:rune, ok:err) {
 	num_read	:u32
-	char		:rune
+  ok = .OK
 	for {
 		if w.PeekConsoleInputW(w.HANDLE(hStdin), &rec_buf, 1, &num_read) {
 			w.ReadConsoleInputW(
 				hStdin,
 				&rec_buf, 1,
 				&num_read)
-					char = rune(rec_buf.Event.KeyEvent.uChar.UnicodeChar)
+					if rec_buf.Event.KeyEvent.bKeyDown {
+            char = rune(rec_buf.Event.KeyEvent.uChar.UnicodeChar)
+          } else {
+            ok = .NO_KEY
+          }
 				break
 		}
 	}
 	w.FlushConsoleInputBuffer(w.HANDLE(hStdin))
-	return char
+	return char, ok
 }
 
 @(private)
@@ -99,7 +105,8 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 	input_char :rune
 	myfor:for {
 		w.SetConsoleCursorPosition(hStdout, {current_index.X, current_index.Y})
-		input_char = getch()
+		input_char, ok = getch()
+    if ok == .NO_KEY do continue
 		switch input_char {
 			case rune(ascii.ENTER): //enter
 				print_error("")
@@ -115,6 +122,7 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 						continue
 					}
 				}
+        ok = .OK
 				break myfor
 				
 			case '0'..='9':
