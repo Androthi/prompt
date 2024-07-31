@@ -1,0 +1,1 @@
+An experimental simple CLI prompt helper
