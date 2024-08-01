@@ -7,9 +7,10 @@ import "core:strings"
 import w "core:sys/windows"
 
 
-
-rec_buf	:w.INPUT_RECORD
-def_prompt :: " :"
+option :: struct {
+	key		:string,
+	value	:int, // TODO: this should be generic?
+}
 
 err	:: enum {
 	OK = 1,
@@ -17,17 +18,25 @@ err	:: enum {
 	INVALID_HANDLE,
 	CONSOLE_MODE,
 	MIN_MAX,
-  NO_KEY,
+  KEY_UP,
 }
 
 // maybe switch to a type... do we need more than one of these?
 console_info ::struct {
-  hStdin	:w.HANDLE,
+	hStdin	:w.HANDLE,
 	hStdout	:w.HANDLE,
 	prompt	:string,
 	scr_buf :w.CONSOLE_SCREEN_BUFFER_INFO,
 }
 c_info :console_info
+def_prompt :: " :"
+
+console_key_event :: struct {
+	char				:rune,
+	scan_code		:u16,
+	repeat_count:u16,
+	is_key_down	:bool,
+}
 
 init :: proc( use_prompt:string = def_prompt) ->err {
   
@@ -44,49 +53,69 @@ init :: proc( use_prompt:string = def_prompt) ->err {
 	return .OK
 }
 
-getch ::proc() ->(char:rune, ok:err) {
-	num_read	:u32
-  ok = .OK
-	for {
-		if w.PeekConsoleInputW(c_info.hStdin, &rec_buf, 1, &num_read) {
-			w.ReadConsoleInputW(
-				c_info.hStdin,
-				&rec_buf, 1,
-				&num_read)
-					if rec_buf.Event.KeyEvent.bKeyDown {
-            char = rune(rec_buf.Event.KeyEvent.uChar.UnicodeChar)
-          } else {
-            ok = .NO_KEY
-          }
-				break
+getch ::proc() ->(rune, err) {
+	key := get_console_key_event()
+	if !key.is_key_down do return key.char, .KEY_UP
+	return key.char, .OK
+}
+
+get_scan_code ::proc() ->(Scancode, err) {
+	key := get_console_key_event()
+	if !key.is_key_down do return Scancode(key.scan_code), .KEY_UP
+	return Scancode(key.scan_code), .OK
+}
+
+get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int) {
+	
+	update_options :: proc(index:int, options:^[]option) {
+		
+		num_options := len(options)
+		for i in 0..<num_options {
+			if i == index do w.SetConsoleTextAttribute(c_info.hStdout, w.FOREGROUND_GREEN)
+			fmt.println(c_info.prompt, options[i].key)
+			w.SetConsoleTextAttribute(c_info.hStdout, c_info.scr_buf.wAttributes)
 		}
+		w.SetConsoleTextAttribute(c_info.hStdout, c_info.scr_buf.wAttributes)
 	}
-	w.FlushConsoleInputBuffer(c_info.hStdin)
-	return char, ok
+
+	value = 0
+	index = 0
+	num_options := len(options)
+	if num_options == 0 do return
+	fmt.println(message, c_info.prompt)
+	w.GetConsoleScreenBufferInfo(c_info.hStdout, &c_info.scr_buf)
+	update_options(index, options)
+	w.SetConsoleCursorPosition(c_info.hStdout, {c_info.scr_buf.dwCursorPosition.X, c_info.scr_buf.dwCursorPosition.Y-i16(num_options)})
+
+	myfor:for {
+		
+		scan_code, ok := get_scan_code()
+		if ok == .KEY_UP do	continue
+
+		#partial switch scan_code {
+			case .num_8: // up
+			if index > 0 do index -= 1
+			
+			case .num_2: // down
+			if index < num_options-1 do index += 1
+			
+			case .enter:
+				value = options[index].value
+				break myfor
+			}
+
+			update_options(index, options)
+			w.SetConsoleCursorPosition(c_info.hStdout, {c_info.scr_buf.dwCursorPosition.X, c_info.scr_buf.dwCursorPosition.Y-i16(num_options)})
+	}
+
+	for i in 0..=num_options {
+		fmt.println()
+	}
+
+	return
 }
 
-@(private)
-print_error ::proc(message:string) {
-
-	@static last_len := 0
-	w.GetConsoleScreenBufferInfo(c_info.hStdout,&c_info.scr_buf)
-	w.SetConsoleTextAttribute(c_info.hStdout, w.FOREGROUND_RED)
-	w.SetConsoleCursorPosition(c_info.hStdout, {0, c_info.scr_buf.dwCursorPosition.Y+1})
-	
-	if last_len > 0 {
-		for x:=0; x < last_len; x+=1 {
-			fmt.print(' ')
-		}
-		last_len = 0
-	}	
-	
-	fmt.print(message)
-	last_len = len(message)
-	w.SetConsoleTextAttribute(c_info.hStdout, c_info.scr_buf.wAttributes)
-	w.SetConsoleCursorPosition(c_info.hStdout, { c_info.scr_buf.dwCursorPosition.X, c_info.scr_buf.dwCursorPosition.Y})
-}
-
-get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:err) {
+get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err) {
 	
 	if min > max do return 0, .MIN_MAX
 	
@@ -108,8 +137,9 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 
 	myfor:for {
 		w.SetConsoleCursorPosition(c_info.hStdout, {current_index.X, current_index.Y})
+
 		input_char, ok = getch()
-    if ok == .NO_KEY do continue
+    if ok == .KEY_UP do continue
 		switch input_char {
 			case rune(ascii.ENTER):
 				print_error("")
@@ -118,14 +148,15 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 					break myfor
 				}
 
-				ret_val= strconv.atoi(strings.trim_null(strings.to_string(str)))
-				if max > 0 {
-					if ret_val < min || ret_val > max{
-						print_error(fmt.bprintf(strbuf[:], "Number must be between %v and %v", min, max))
-						continue
-					}
+				value= strconv.atoi(strings.trim_null(strings.to_string(str)))
+				if min == 0 && max == 0 do break myfor
+				
+				// this format doesn't allow for only a min value or only a max value.
+				// it's both or nothing.
+				if value > max || value < min {
+					print_error(fmt.bprintf(strbuf[:], "Number must be between %v and %v", min, max))
+					continue
 				}
-        ok = .OK
 				break myfor
 				
 			case '0'..='9':
@@ -138,6 +169,7 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 				print_error("")
 			
 			case rune(ascii.MINUS):
+				print_error("")
 				if strings.builder_len(str) > 0 {
 					print_error("'-' can only be used as a prefix to a number")
 					continue
@@ -168,8 +200,50 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 				continue
 		}
 	}
-	return ret_val, ok
+	return value, ok
 }
+
+@(private)
+print_error ::proc(message:string) {
+
+	@static last_len := 0
+	w.GetConsoleScreenBufferInfo(c_info.hStdout,&c_info.scr_buf)
+	w.SetConsoleTextAttribute(c_info.hStdout, w.FOREGROUND_RED)
+	w.SetConsoleCursorPosition(c_info.hStdout, {0, c_info.scr_buf.dwCursorPosition.Y+1})
+	
+	if last_len > 0 {
+		for x:=0; x < last_len; x+=1 {
+			fmt.print(' ')
+		}
+		last_len = 0
+	}	
+	
+	fmt.print(message)
+	last_len = len(message)
+	w.SetConsoleTextAttribute(c_info.hStdout, c_info.scr_buf.wAttributes)
+	w.SetConsoleCursorPosition(c_info.hStdout, { c_info.scr_buf.dwCursorPosition.X, c_info.scr_buf.dwCursorPosition.Y})
+}
+
+@(private)
+get_console_key_event :: proc() -> console_key_event {
+	num_read	:u32
+	rec_buf	:w.INPUT_RECORD
+
+	for {
+		if w.PeekConsoleInputW(c_info.hStdin, &rec_buf, 1, &num_read) {
+			w.ReadConsoleInputW(c_info.hStdin, &rec_buf, 1,	&num_read)
+			if rec_buf.EventType != .KEY_EVENT do continue
+			break
+		}
+	}
+	return console_key_event{
+		char = rune(rec_buf.Event.KeyEvent.uChar.UnicodeChar),
+		scan_code = rec_buf.Event.KeyEvent.wVirtualScanCode,
+		repeat_count = rec_buf.Event.KeyEvent.wRepeatCount,
+		is_key_down = bool(rec_buf.Event.KeyEvent.bKeyDown),
+	}
+}
+
 
 ascii :: enum u8 {
     NUL  = 0,  // Null character
@@ -207,8 +281,8 @@ ascii :: enum u8 {
 	MINUS= 45,
 }
 
-/*
-Scancode :: enum {
+
+Scancode :: enum u16 {
 	
 		unknown = 0x00,
     escape = 0x01,    
@@ -366,7 +440,7 @@ Scancode :: enum {
     launch_email = 0xE06C,
     launch_media = 0xE06D,
 
-    pause = 0xE11D45,
+    //pause = 0xE11D45,
     /*
     pause:
     - make: 0xE11D 45 0xE19D C5
@@ -377,4 +451,3 @@ Scancode :: enum {
     - when pressed at the same time as one or both control keys, generates a 0xE046 (cancel) and the string for that scancode is "break".
     */
 }
-*/
