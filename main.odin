@@ -21,13 +21,12 @@ main :: proc (){
 
   num, ok = p.get_number("\n\n\nEnter a number") 
   if ok == .OK do fmt.println("\nEntered->", num)
-  fmt.println()
 
-  num, ok = p.get_number("Enter a number between 10 and 20", -19, 0)
+  num, ok = p.get_number("\nEnter a number between 10 and 20", 10, 20)
   if ok == .OK do fmt.println("\nEntered->", num)
   fmt.println()
 
   value, index:= p.get_options("\nPick a Color", &colors)
-  fmt.println("selected ", colors[index].key, " with value of ", value)
+  fmt.println("selected", colors[index].key, "with value of ", value)
 
 }
