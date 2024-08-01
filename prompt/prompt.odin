@@ -12,7 +12,6 @@ hStdout	: w.HANDLE
 rec_buf	:w.INPUT_RECORD
 
 def_prompt :: " :"
-prompt		:string
 
 err	:: enum {
 	OK = 1,
@@ -23,19 +22,27 @@ err	:: enum {
   NO_KEY,
 }
 
+// maybe switch to a type... do we need more than one of these?
+console_info ::struct {
+  hStdin	:w.HANDLE,
+	hStdout	:w.HANDLE,
+	prompt	:string,
+	scr_buf :w.CONSOLE_SCREEN_BUFFER_INFO,
+}
+c_info :console_info
+
 init :: proc( use_prompt:string = def_prompt) ->err {
   
-	hStdin = w.GetStdHandle(w.STD_INPUT_HANDLE)
-	if hStdin == w.INVALID_HANDLE do return .INVALID_HANDLE
-	hStdout = w.GetStdHandle(w.STD_OUTPUT_HANDLE)
-	if hStdout == w.INVALID_HANDLE do return .INVALID_HANDLE
-
-	prompt = use_prompt
+	c_info.hStdin = w.GetStdHandle(w.STD_INPUT_HANDLE)
+	if c_info.hStdin == w.INVALID_HANDLE do return .INVALID_HANDLE
+	c_info.hStdout = w.GetStdHandle(w.STD_OUTPUT_HANDLE)
+	if c_info.hStdout == w.INVALID_HANDLE do return .INVALID_HANDLE
+	c_info.prompt = use_prompt
 
 	// don't need these yet. 
 	//if ! w.GetConsoleMode(hStdin, &old_mode) do return .CONSOLE_MODE
-	w.FlushConsoleInputBuffer(w.HANDLE(hStdin))
-  w.FlushConsoleInputBuffer(w.HANDLE(hStdout))
+	w.FlushConsoleInputBuffer(c_info.hStdin)
+	w.FlushConsoleInputBuffer(c_info.hStdout)
 	return .OK
 }
 
@@ -43,9 +50,9 @@ getch ::proc() ->(char:rune, ok:err) {
 	num_read	:u32
   ok = .OK
 	for {
-		if w.PeekConsoleInputW(w.HANDLE(hStdin), &rec_buf, 1, &num_read) {
+		if w.PeekConsoleInputW(c_info.hStdin, &rec_buf, 1, &num_read) {
 			w.ReadConsoleInputW(
-				hStdin,
+				c_info.hStdin,
 				&rec_buf, 1,
 				&num_read)
 					if rec_buf.Event.KeyEvent.bKeyDown {
@@ -56,7 +63,7 @@ getch ::proc() ->(char:rune, ok:err) {
 				break
 		}
 	}
-	w.FlushConsoleInputBuffer(w.HANDLE(hStdin))
+	w.FlushConsoleInputBuffer(c_info.hStdin)
 	return char, ok
 }
 
@@ -64,13 +71,9 @@ getch ::proc() ->(char:rune, ok:err) {
 print_error ::proc(message:string) {
 
 	@static last_len := 0
-	
-	screen_buf_info : w.CONSOLE_SCREEN_BUFFER_INFO
-	w.GetConsoleScreenBufferInfo(hStdout,&screen_buf_info)
-	save_cursor_pos := screen_buf_info.dwCursorPosition
-	save_color_info := &screen_buf_info.wAttributes
-	w.SetConsoleTextAttribute(hStdout, w.FOREGROUND_RED)
-	w.SetConsoleCursorPosition(hStdout, {0, save_cursor_pos.Y+1})
+	w.GetConsoleScreenBufferInfo(c_info.hStdout,&c_info.scr_buf)
+	w.SetConsoleTextAttribute(c_info.hStdout, w.FOREGROUND_RED)
+	w.SetConsoleCursorPosition(c_info.hStdout, {0, c_info.scr_buf.dwCursorPosition.Y+1})
 	
 	if last_len > 0 {
 		for x:=0; x < last_len; x+=1 {
@@ -81,34 +84,36 @@ print_error ::proc(message:string) {
 	
 	fmt.print(message)
 	last_len = len(message)
-	w.SetConsoleTextAttribute(hStdout, save_color_info^)
-	w.SetConsoleCursorPosition(hStdout, {save_cursor_pos.X, save_cursor_pos.Y})
+	w.SetConsoleTextAttribute(c_info.hStdout, c_info.scr_buf.wAttributes)
+	w.SetConsoleCursorPosition(c_info.hStdout, { c_info.scr_buf.dwCursorPosition.X, c_info.scr_buf.dwCursorPosition.Y})
 }
 
 get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:err) {
 	
+	if min > max do return 0, .MIN_MAX
+	
 	ok = .OK
 	str :strings.Builder
 	defer strings.builder_destroy(&str)
-	fix_string:string
 	strings.builder_init(&str, 0, 50)
-	fmt.print(message, prompt)
+	fmt.print(message, c_info.prompt)
 	min := min
 	max := max
-	screen_buf_info : w.CONSOLE_SCREEN_BUFFER_INFO
-	w.GetConsoleScreenBufferInfo(hStdout,&screen_buf_info)
-	current_index := screen_buf_info.dwCursorPosition
-	
-	if min > max do return 0, .MIN_MAX
-	
+	w.GetConsoleScreenBufferInfo(c_info.hStdout,&c_info.scr_buf)
+	current_index := c_info.scr_buf.dwCursorPosition
+	// make sure there is an empty line below the current cursor for error information
+	fmt.println()
+	current_index.Y -= 1
+
 	strbuf	:[300]u8
 	input_char :rune
+
 	myfor:for {
-		w.SetConsoleCursorPosition(hStdout, {current_index.X, current_index.Y})
+		w.SetConsoleCursorPosition(c_info.hStdout, {current_index.X, current_index.Y})
 		input_char, ok = getch()
     if ok == .NO_KEY do continue
 		switch input_char {
-			case rune(ascii.ENTER): //enter
+			case rune(ascii.ENTER):
 				print_error("")
 				if strings.builder_len(str) == 0 {
 					ok = .CANCEL
@@ -145,10 +150,11 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 				current_index.X += 1
 				print_error("")
 
-			case rune(ascii.BACKSPACE): //backspace
+			case rune(ascii.BACKSPACE):
 				if strings.builder_len(str) > 0 {
 					strings.pop_rune(&str)
-					w.SetConsoleCursorPosition(hStdout, {current_index.X-1, current_index.Y})
+					//w.SetConsoleCursorPosition(hStdout, {current_index.X-1, current_index.Y})
+					w.SetConsoleCursorPosition(c_info.hStdout, {current_index.X-1, current_index.Y})
 					fmt.print(' ')
 					current_index.X-=1
 				}
@@ -159,7 +165,7 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (ret_val:int, ok:e
 				if min >0 {
 					print_error(fmt.bprintf(strbuf[:], "Enter a number between %v and %v", min, max))
 				} else {
-					print_error("Enter a valid possitive number")
+					print_error("Enter a valid possitive or negative number")
 				}
 				continue
 		}

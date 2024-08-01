@@ -1,3 +1,5 @@
+// exampel using the prompt.odin package
+
 package main
 
 import "core:fmt"
