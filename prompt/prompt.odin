@@ -7,10 +7,8 @@ import "core:strings"
 import w "core:sys/windows"
 
 
-hStdin  : w.HANDLE
-hStdout	: w.HANDLE
-rec_buf	:w.INPUT_RECORD
 
+rec_buf	:w.INPUT_RECORD
 def_prompt :: " :"
 
 err	:: enum {
