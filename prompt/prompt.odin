@@ -38,6 +38,7 @@ console_key_event :: struct {
 	is_key_down	:bool,
 }
 
+
 init :: proc( use_prompt:string = def_prompt) ->err {
   
 	c_info.hStdin = w.GetStdHandle(w.STD_INPUT_HANDLE)
