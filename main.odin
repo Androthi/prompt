@@ -13,6 +13,8 @@ colors := []p.option{
 	{"Blue",   0x00_00_00_FF},
 }
 
+// these will go into a console package
+
 scroll_down :: #force_inline proc (n:int) {
 	fmt.printf("%s%v%s", ansi.CSI, n, ansi.SD )
 }
@@ -144,11 +146,10 @@ main :: proc (){
 	cursor_to(10,10)
 	set_background_color8(60)
 	set_forground_color24(0, 255, 0)
-	fmt.print("here?")
+	fmt.println("green")
 	reset()
 
-	/*
-	//	fmt.print("?")
+	
 	ok = p.init("->")
 	if ok != .OK do fmt.println("error: ", ok)
 
@@ -161,5 +162,5 @@ main :: proc (){
 
 	value, index:= p.get_options("\nPick a Color", &colors)
 	fmt.println("selected", colors[index].key, "with value of ", value)
-*/
+	
 }
