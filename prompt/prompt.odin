@@ -22,7 +22,6 @@ err	:: enum {
   KEY_UP,
 }
 
-//c_info :con.console_info
 def_prompt :: " :"
 prompt : string = def_prompt
 prompt_cursor_pos :[2]i16
@@ -57,15 +56,13 @@ get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int
 	num_options := len(options)
 	if num_options == 0 do return
 
-  // create the space for our options
-  // probably a good idea to have a proc for this.
-  con.scroll_up(num_options)
+	// make space below for printing the options and the prompt
+	line_feed(num_options+1)
   cursor_pos = con.get_cursor_pos()
-  cursor_pos.y -= i16(num_options)
-  con.cursor_to( cursor_pos.x, cursor_pos.y)
+  con.cursor_to( 0, cursor_pos.y - i16(num_options+1))
 
 	fmt.print(message, prompt, "")
-  prompt_cursor_pos = con.get_cursor_pos()
+  prompt_cursor_pos = con.get_cursor_pos()	
 
   con.hide_cursor()
   defer con.show_cursor()
@@ -101,23 +98,97 @@ get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int
 	return
 }
 
+line_feed :: #force_inline proc(n:int) { for i:=0; i<n; i+=1 do fmt.println() }
+
+// caller must free returned string
+get_password :: proc(message:string, min_len:int=0, max_len:int=0, show:bool=false) ->(value:string, ok:err) {
+
+	if min_len > max_len do return "", .MIN_MAX
+	ok = .OK
+	str: strings.Builder
+	defer strings.builder_destroy(&str)
+	strings.builder_init(&str, 0, 50)
+	fmt.print(message, prompt, "")
+	prompt_cursor_pos = con.get_cursor_pos()
+	cursor_pos = prompt_cursor_pos
+	// make room for error message under prompt
+	con.scroll_up(1)
+	input_char :rune
+	strbuf	:[300]u8
+
+	if !show {
+		
+		con.hide_cursor()
+		defer con.show_cursor()
+	 }
+		myfor:for {
+			con.cursor_to(cursor_pos.x, cursor_pos.y)
+			input_char, ok = getch()
+    if ok == .KEY_UP do continue
+		switch input_char {
+			case rune(ascii.ENTER):
+				print_error("")
+				
+				strlen := strings.builder_len(str)
+				if strlen == 0 {
+					ok = .CANCEL
+					break myfor
+				}
+
+				if min_len > 0 && strlen < min_len {
+					print_error(fmt.bprintf(strbuf[:], "Length of password must be at least %v characters", min_len))
+					continue
+				}
+
+				if max_len > 0 && strlen > max_len {
+					print_error(fmt.bprintf(strbuf[:], "Length of password must not exceed %v characters", max_len))
+					continue
+				}
+				
+				break myfor
+						
+			case rune(ascii.BACKSPACE):
+				if strings.builder_len(str) > 0 {
+					strings.pop_rune(&str)
+					if show {
+						con.back_space()
+          	cursor_pos.x -= 1
+					}
+				}
+				print_error("")
+
+			case 32..=126:
+				if show {
+					fmt.print("*")
+					cursor_pos.x += 1
+				}
+
+				strings.write_rune(&str, input_char)
+				print_error("")
+
+			case: 
+				// ignore modifier keys
+				continue
+		}
+	}
+
+	return strings.clone(strings.to_string(str)), ok
+}
+
 get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err) {
 	
 	if min > max do return 0, .MIN_MAX
-	
 	ok = .OK
 	str :strings.Builder
 	defer strings.builder_destroy(&str)
 	strings.builder_init(&str, 0, 50)
 	fmt.print(message, prompt, "")
-	min := min
-	max := max
 
-  prompt_cursor_pos := con.get_cursor_pos()
+  prompt_cursor_pos = con.get_cursor_pos()
   cursor_pos = prompt_cursor_pos
  	// make sure there is an empty line below the current cursor for error information
-  con.scroll_up(1)
-
+	con.scroll_up(1)
+	
 	strbuf	:[300]u8
 	input_char :rune
 

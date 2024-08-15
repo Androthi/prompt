@@ -42,7 +42,6 @@ flush :: proc( handle:w.HANDLE) {
 
 get_cursor_pos :: proc() -> [2]i16 {
 	w.GetConsoleScreenBufferInfo(info.hStdout, &info.scr_buf)
-    // note: backwards!
     return { info.scr_buf.dwCursorPosition.X, info.scr_buf.dwCursorPosition.Y }
 }
 
@@ -67,11 +66,12 @@ get_console_key_event :: proc() -> console_key_event {
 	}
 }
 
-
+// scroll up and scroll down mess with the cursor position 
 scroll_down :: #force_inline proc (n:int) {
 	fmt.printf("%s%v%s", ansi.CSI, n, ansi.SD )
 }
 
+// scroll up and scroll down mess with the cursor position
 scroll_up :: #force_inline proc (n:int) {
 	fmt.printf("%s%v%s", ansi.CSI, n, ansi.SU )
 }
@@ -125,8 +125,8 @@ clear_screen	:: #force_inline proc() {
 	fmt.printf("%s2%s", ansi.CSI, ansi.ED)
 }
 
-cursor_to :: #force_inline proc(column:i16 = 1, line:i16 = 1) {
-	fmt.printf("%s%v;%v%s", ansi.CSI, line, column, ansi.CUP)
+cursor_to :: #force_inline proc(column:i16 = 1, row:i16 = 1) {
+	fmt.printf("%s%v;%v%s", ansi.CSI, row, column, ansi.CUP)
 }
 
 cursor_home	:: #force_inline proc() {
