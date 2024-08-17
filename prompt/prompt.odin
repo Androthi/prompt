@@ -12,6 +12,10 @@ option :: struct {
 	key		:string,
 	value	:int, // TODO: this should be generic?
 }
+multi_option :: struct {
+	option		:string,
+	is_selected	:bool,
+}
 
 err	:: enum {
 	OK = 1,
@@ -34,9 +38,9 @@ init :: proc( use_prompt:string = def_prompt) ->err {
 	return .OK
 }
 
-get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int) {
+get_option :: proc(message:string, options: ^[]option) -> (value:int, index:int) {
 	
-	update_options :: proc(index:int, options:^[]option) {
+	update_option :: proc(index:int, options:^[]option) {
     
     cursor_pos = prompt_cursor_pos
     cursor_pos.y += 1
@@ -66,7 +70,7 @@ get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int
 
   con.hide_cursor()
   defer con.show_cursor()
-  update_options(index, options)
+  update_option(index, options)
 
 	myfor:for {
 		
@@ -87,13 +91,90 @@ get_options :: proc(message:string, options: ^[]option) -> (value:int, index:int
 				break myfor
 			}
 
-			update_options(index, options)
+			update_option(index, options)
     }
 
     // scroll below the options to continue
     for i in 0..=num_options {
       fmt.println()
     }
+
+	return
+}
+
+get_options :: proc(message:string, options: ^[]multi_option) {
+	
+	update_options :: proc(index:int, options: ^[]multi_option) {
+    
+    cursor_pos = prompt_cursor_pos
+    cursor_pos.y += 1
+    num_options := len(options)
+		for i in 0..<num_options {
+			cursor_pos.y += 1
+      con.cursor_to(0, cursor_pos.y)
+			
+      if options[i].is_selected {
+				fmt.print("[")
+				con.set_color_ansi(ansi.FG_GREEN)
+				if i == index do con.set_underline()
+				fmt.print("X")
+				con.reset()
+				fmt.print("] ", options[i].option)
+				continue
+			}
+			fmt.print("[")
+			if i == index do con.set_underline()
+			fmt.print(" ")
+			con.reset()
+			fmt.print("] ", options[i].option)
+		}
+    con.reset()
+  }
+
+	index := 0
+	num_options := len(options)
+	if num_options == 0 do return
+
+	// make space below for printing the options and the prompt
+	line_feed(num_options+1)
+  cursor_pos = con.get_cursor_pos()
+  con.cursor_to( 0, cursor_pos.y - i16(num_options+1))
+
+	fmt.print(message, prompt, "")
+  prompt_cursor_pos = con.get_cursor_pos()	
+
+  con.hide_cursor()
+  defer con.show_cursor()
+  update_options(index, options)
+
+	myfor:for {
+		
+		//key := con.get_console_key_event()
+		//if !key.is_key_down do continue
+		scan_code, ok := get_scan_code()
+		if ok == .KEY_UP do continue
+
+		#partial switch scan_code {
+			case .num_8: // up
+				if index > 0 do index -= 1
+			
+			case .num_2: // down
+				if index < num_options-1 do index += 1
+			
+			case .space:
+				options[index].is_selected ~= !options[index].is_selected
+				
+			case .enter:
+				break myfor
+
+			}
+			update_options(index, options)
+    }
+		fmt.print("\n\n")
+    // scroll below the options to continue
+  //  for i in 0..=num_options {
+   //   fmt.println()
+   // }
 
 	return
 }
@@ -320,6 +401,7 @@ ascii :: enum u8 {
   GS   = 29, // Group Separator
   RS   = 30, // Record Separator
   US   = 31, // Unit Separator
-MINUS= 45,
+	SPACE = 32,
+	MINUS= 45,
 }
 

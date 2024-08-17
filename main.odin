@@ -14,12 +14,22 @@ colors := []p.option{
 	{"Blue",   0x00_00_00_FF},
 }
 
+f:: false
+options	:= []p.multi_option {
+	{"Mix the Fludgebar", f},
+	{"Sanitize Pliffle Balls", f},
+	{"Polish the Florp Bucket", f},
+	{"Straighten Mugglewart", f},
+	{"Defizzle Buckwarden", f},
+}
+
 main :: proc (){
 	
 	ok:p.err
 	num :int
 	str :string
 /*
+	con.init()
 	con.cls()
 	con.set_color_ansi(ansi.FG_CYAN)
 	fmt.print("Hellope")
@@ -35,36 +45,20 @@ main :: proc (){
 	con.reset()
 	fmt.println()
 */	
-	// con.init()
-	//con.cls()
-/*
-	fmt.print("\n\n     :")
-	pos := con.get_cursor_pos()
-	fmt.print("cursor :", pos.x," : ", pos.y)
-	con.cursor_to(pos.x, pos.y)
-	fmt.print("]")
-*/
-	// pos := con.get_cursor_pos()
-	// fmt.print("befoe >", pos)
-	
-	// pos = con.get_cursor_pos()
-	// fmt.print("after >", pos)
-//	con.cursor_to(0, pos.y-10)
-//	fmt.print("should be right after here before")
 
-	ok = p.init("->")
+ok = p.init("->")
 	if ok != .OK do fmt.println("error: ", ok)
 
-	// num, ok = p.get_number("\n\n\nEnter a number") 
-	// if ok == .OK do fmt.println("\nEntered->", num)
+	num, ok = p.get_number("\n\n\nEnter a number") 
+	if ok == .OK do fmt.println("\nEntered->", num)
 
-	// num, ok = p.get_number("\nEnter a number between 10 and 20", 10, 20)
-	// if ok == .OK do fmt.println("\nEntered->", num)
-	// fmt.println()
+	num, ok = p.get_number("\nEnter a number between 10 and 20", 10, 20)
+	if ok == .OK do fmt.println("\nEntered->", num)
+	fmt.println()
 	
 
-	// value, index:= p.get_options("\nPick a Color", &colors)
-	// fmt.println("selected", colors[index].key, "with value of ", value)
+	value, index:= p.get_option("\nPick a Color", &colors)
+	fmt.println("selected", colors[index].key, "with value of ", value)
 
 	str, ok = p.get_password("Enter a password ", 6, 10, true)
 	if ok == .OK do fmt.println("\nEntered->", str)
@@ -72,4 +66,10 @@ main :: proc (){
 	str, ok = p.get_password("Enter a password ")
 	if ok == .OK do fmt.println("\nEntered->", str)
 
+	p.get_options("\nSelect all that apply", &options )
+	for i := 0; i < len(options); i +=1 {
+		if options[i].is_selected {
+			fmt.println( options[i].option, " is selected")
+		} else do fmt.println(options[i].option, " is not selected")
+	}
 }

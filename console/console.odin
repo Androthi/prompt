@@ -183,6 +183,10 @@ set_background_color24 :: #force_inline proc(r,g,b:u8) {
 	fmt.printf("%s%s;%v;%v;%v%s", ansi.CSI, ansi.BG_COLOR_24_BIT, r, g, b, ansi.SGR)
 }
 
+set_underline :: #force_inline proc() {
+	fmt.printf("%s%s%s", ansi.CSI, ansi.UNDERLINE, ansi.SGR)
+}
+
 Scancode :: enum u16 {
 	
     unknown = 0x00,
