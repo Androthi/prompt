@@ -8,10 +8,11 @@ import w "core:sys/windows"
 import con "../console"
 import ansi "core:encoding/ansi"
 
-option :: struct {
+option :: struct($T:typeid) {
 	key		:string,
-	value	:int, // TODO: this should be generic?
+	value	:T,
 }
+
 multi_option :: struct {
 	option		:string,
 	is_selected	:bool,
@@ -38,21 +39,21 @@ init :: proc( use_prompt:string = def_prompt) ->err {
 	return .OK
 }
 
-get_option :: proc(message:string, options: ^[]option) -> (value:int, index:int) {
+get_option :: proc(message:string, options: ^[]option($T)) -> (value:T, index:int) {
 	
-	update_option :: proc(index:int, options:^[]option) {
-    
-    cursor_pos = prompt_cursor_pos
-    cursor_pos.y += 1
-    num_options := len(options)
+	update_option :: proc(index:int, options:^[]option($T)) {
+	
+	cursor_pos = prompt_cursor_pos
+	cursor_pos.y += 1
+	num_options := len(options)
 		for i in 0..<num_options {
 			cursor_pos.y += 1
-      con.cursor_to(0, cursor_pos.y)
-      if i == index do con.set_color_ansi(ansi.FG_GREEN)
+	  con.cursor_to(0, cursor_pos.y)
+	  if i == index do con.set_color_ansi(ansi.FG_GREEN)
 			fmt.print(prompt, options[i].key)
 			con.reset()
 		}
-    con.reset()
+	con.reset()
   }
 
 	value = 0
@@ -86,18 +87,18 @@ get_option :: proc(message:string, options: ^[]option) -> (value:int, index:int)
 			
 			case .enter:
 				value = options[index].value
-        con.cursor_to(prompt_cursor_pos.x, prompt_cursor_pos.y+1)
-        fmt.print(options[index].key)
+				con.cursor_to(prompt_cursor_pos.x, prompt_cursor_pos.y+1)
+				fmt.print(options[index].key)
 				break myfor
 			}
 
 			update_option(index, options)
-    }
+	}
 
-    // scroll below the options to continue
-    for i in 0..=num_options {
-      fmt.println()
-    }
+	// scroll below the options to continue
+	for i in 0..=num_options {
+	  fmt.println()
+	}
 
 	return
 }
@@ -105,15 +106,15 @@ get_option :: proc(message:string, options: ^[]option) -> (value:int, index:int)
 get_options :: proc(message:string, options: ^[]multi_option) {
 	
 	update_options :: proc(index:int, options: ^[]multi_option) {
-    
-    cursor_pos = prompt_cursor_pos
-    cursor_pos.y += 1
-    num_options := len(options)
+	
+	cursor_pos = prompt_cursor_pos
+	cursor_pos.y += 1
+	num_options := len(options)
 		for i in 0..<num_options {
 			cursor_pos.y += 1
-      con.cursor_to(0, cursor_pos.y)
+			con.cursor_to(0, cursor_pos.y)
 			
-      if options[i].is_selected {
+			if options[i].is_selected {
 				fmt.print("[")
 				con.set_color_ansi(ansi.FG_GREEN)
 				if i == index do con.set_underline()
@@ -128,8 +129,8 @@ get_options :: proc(message:string, options: ^[]multi_option) {
 			con.reset()
 			fmt.print("] ", options[i].option)
 		}
-    con.reset()
-  }
+	con.reset()
+	}
 
 	index := 0
 	num_options := len(options)
@@ -137,20 +138,18 @@ get_options :: proc(message:string, options: ^[]multi_option) {
 
 	// make space below for printing the options and the prompt
 	line_feed(num_options+1)
-  cursor_pos = con.get_cursor_pos()
-  con.cursor_to( 0, cursor_pos.y - i16(num_options+1))
+	cursor_pos = con.get_cursor_pos()
+	con.cursor_to( 0, cursor_pos.y - i16(num_options+1))
 
 	fmt.print(message, prompt, "")
-  prompt_cursor_pos = con.get_cursor_pos()	
+	prompt_cursor_pos = con.get_cursor_pos()	
 
-  con.hide_cursor()
-  defer con.show_cursor()
-  update_options(index, options)
+	con.hide_cursor()
+	defer con.show_cursor()
+	update_options(index, options)
 
 	myfor:for {
 		
-		//key := con.get_console_key_event()
-		//if !key.is_key_down do continue
 		scan_code, ok := get_scan_code()
 		if ok == .KEY_UP do continue
 
@@ -162,20 +161,15 @@ get_options :: proc(message:string, options: ^[]multi_option) {
 				if index < num_options-1 do index += 1
 			
 			case .space:
-				options[index].is_selected ~= !options[index].is_selected
+				options[index].is_selected = !options[index].is_selected
 				
 			case .enter:
 				break myfor
 
 			}
 			update_options(index, options)
-    }
+	}
 		fmt.print("\n\n")
-    // scroll below the options to continue
-  //  for i in 0..=num_options {
-   //   fmt.println()
-   // }
-
 	return
 }
 
@@ -205,7 +199,7 @@ get_password :: proc(message:string, min_len:int=0, max_len:int=0, show:bool=fal
 		myfor:for {
 			con.cursor_to(cursor_pos.x, cursor_pos.y)
 			input_char, ok = getch()
-    if ok == .KEY_UP do continue
+	if ok == .KEY_UP do continue
 		switch input_char {
 			case rune(ascii.ENTER):
 				print_error("")
@@ -233,7 +227,7 @@ get_password :: proc(message:string, min_len:int=0, max_len:int=0, show:bool=fal
 					strings.pop_rune(&str)
 					if show {
 						con.back_space()
-          	cursor_pos.x -= 1
+		  	cursor_pos.x -= 1
 					}
 				}
 				print_error("")
@@ -265,8 +259,8 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err
 	strings.builder_init(&str, 0, 50)
 	fmt.print(message, prompt, "")
 
-  prompt_cursor_pos = con.get_cursor_pos()
-  cursor_pos = prompt_cursor_pos
+	prompt_cursor_pos = con.get_cursor_pos()
+	cursor_pos = prompt_cursor_pos
  	// make sure there is an empty line below the current cursor for error information
 	con.scroll_up(1)
 	
@@ -274,9 +268,9 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err
 	input_char :rune
 
 	myfor:for {
-    con.cursor_to(cursor_pos.x, cursor_pos.y)
-    input_char, ok = getch()
-    if ok == .KEY_UP do continue
+	con.cursor_to(cursor_pos.x, cursor_pos.y)
+	input_char, ok = getch()
+	if ok == .KEY_UP do continue
 		switch input_char {
 			case rune(ascii.ENTER):
 				print_error("")
@@ -284,7 +278,7 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err
 					ok = .CANCEL
 					break myfor
 				}
-
+				
 				value= strconv.atoi(strings.trim_null(strings.to_string(str)))
 				if min == 0 && max == 0 do break myfor
 				
@@ -302,25 +296,25 @@ get_number :: proc(message:string, min:int = 0, max:int=0) -> (value:int, ok:err
 				// not exceed maximum digits of int
 				fmt.print(input_char)
 				strings.write_rune(&str, input_char)
-        cursor_pos.x += 1
+				cursor_pos.x += 1
 				print_error("")
 			
-			case rune(ascii.MINUS):
+			case rune(ascii.MINUS), rune(ascii.PLUS):
 				if strings.builder_len(str) > 0 {
-					print_error("'-' can only be used as a prefix to a number")
+					print_error("'-' and '+' can only be used as a prefix to a number")
 					continue
 				}
 				
 				fmt.print(input_char)
 				strings.write_rune(&str, input_char)
-        cursor_pos.x += 1
-        print_error("")
+				cursor_pos.x += 1
+				print_error("")
 
 			case rune(ascii.BACKSPACE):
 				if strings.builder_len(str) > 0 {
 					strings.pop_rune(&str)
 					con.back_space()
-          cursor_pos.x -= 1
+					cursor_pos.x -= 1
 				}
 				print_error("")
 
@@ -346,8 +340,8 @@ print_error ::proc(message:string) {
   con.cursor_to(0, save_cursor.y+1)
 	
 	if last_len > 0 {
-    con.delete_line()
-    last_len = 0
+	con.delete_line()
+	last_len = 0
 	}	
 	
 	fmt.print(message)
@@ -401,7 +395,8 @@ ascii :: enum u8 {
   GS   = 29, // Group Separator
   RS   = 30, // Record Separator
   US   = 31, // Unit Separator
-	SPACE = 32,
-	MINUS= 45,
+  SPACE = 32,
+  PLUS = 43,
+  MINUS= 45,
 }
 

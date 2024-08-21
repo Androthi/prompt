@@ -8,18 +8,20 @@ import con "console"
 import "core:strings"
 import "core:encoding/ansi"
 
-colors := []p.option{
+colors := []p.option(u32) {
 	{"Red",    0x00_FF_00_00},
 	{"Green",  0x00_00_FF_00},
 	{"Blue",   0x00_00_00_FF},
 }
+
+
 
 f:: false
 options	:= []p.multi_option {
 	{"Mix the Fludgebar", f},
 	{"Sanitize Pliffle Balls", f},
 	{"Polish the Florp Bucket", f},
-	{"Straighten Mugglewart", f},
+	{"Straighten Mugglewart", true}, // we can set initial setting to true
 	{"Defizzle Buckwarden", f},
 }
 
@@ -28,9 +30,17 @@ main :: proc (){
 	ok:p.err
 	num :int
 	str :string
-/*
+	
 	con.init()
 	con.cls()
+	sz := con.get_screen_size()
+	con.write_text("Hellope", (sz.x-(len("Hellope"))/2)/2, sz.y/2, u8(10), u8(22))
+	fmt.println("\n")
+	/*
+	con.init()
+	con.cls()
+	sz := con.get_screen_size()
+	con.write_text("message", (sz.x-(len("message"))/2)/2, sz.y/2, u8(100), u8(200))
 	con.set_color_ansi(ansi.FG_CYAN)
 	fmt.print("Hellope")
 	con.reset()

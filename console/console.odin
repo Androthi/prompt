@@ -40,9 +40,33 @@ flush :: proc( handle:w.HANDLE) {
     w.FlushConsoleInputBuffer(handle)
 }
 
+@(private)
+write_text_col8 :: proc (message:string, column, row:i16, fg_col, bg_col:u8) {
+	set_forground_color8(fg_col)
+	set_background_color8(bg_col)
+	cursor_to(column, row)
+	fmt.print(message)
+	reset()
+}
+
+@(private)
+write_text_default :: proc (message:string, column, row:i16, fg_col:i16 = -1, bg_col:i16 = -1) {
+
+	cursor_to(column, row)
+	fmt.print(message)
+
+}
+
+write_text :: proc {write_text_default, write_text_col8}
+
+get_screen_size :: proc() -> [2]i16 {
+	w.GetConsoleScreenBufferInfo(info.hStdout, &info.scr_buf)
+	return {info.scr_buf.dwSize.X, info.scr_buf.dwSize.Y}
+}
+
 get_cursor_pos :: proc() -> [2]i16 {
 	w.GetConsoleScreenBufferInfo(info.hStdout, &info.scr_buf)
-    return { info.scr_buf.dwCursorPosition.X, info.scr_buf.dwCursorPosition.Y }
+    return {info.scr_buf.dwCursorPosition.X, info.scr_buf.dwCursorPosition.Y}
 }
 
 // needs linux version
